@@ -1,280 +1,186 @@
-# FCDM: Fuzzy MCDM Framework for Insurance Broker Performance Evaluation
+# Fuzzy MCDM Framework for Insurance Broker Performance Evaluation
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue?logo=python)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Status: Complete](https://img.shields.io/badge/Status-Complete-brightgreen)]()
 
-> **Implementation of a Robust Hybrid Multi-Criteria Decision Making (MCDM) Framework featuring Fuzzy LBWA and Modified ARTASI with Decision Stability Intervals and Monte Carlo Robustness Assessment.**
->
-> Based on the research paper:  
+A robust hybrid Multi-Criteria Decision-Making (MCDM) framework combining **Fuzzy Level-Based Weight Assessment (F-LBWA)** and **Modified ARTASI**, augmented with **Decision Stability Intervals (DSI)** and **Monte Carlo Robustness Analysis**.
+
+Based on the research paper:
 > **"A robust hybrid MCDM framework with emphasis on decision stability intervals: Performance evaluation of global insurance brokers using fuzzy LBWA and modified ARTASI"**  
-> *Applied Soft Computing Journal 190 (2026) 114557*
+> *Applied Soft Computing*, Vol. 190 (2026), 114557.
 
 ---
 
-## 📋 Table of Contents
+## 📌 Framework Architecture
 
-- [Overview](#overview)
-- [Case Study](#case-study)
-- [Modules](#modules)
-  - [Module 1 — Fuzzy LBWA](#module-1--fuzzy-lbwa)
-  - [Module 2 — Modified ARTASI](#module-2--modified-artasi)
-  - [Module 3 — Decision Stability Intervals (DSI)](#module-3--decision-stability-intervals-dsi)
-  - [Module 4 — Monte Carlo Robustness](#module-4--monte-carlo-robustness)
-- [Test Programs](#test-programs)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Key Results](#key-results)
-
----
-
-## Overview
-
-This repository implements a hybrid Multi-Criteria Decision Making (MCDM) framework that integrates:
-
-1. **Fuzzy Logic** — handling vagueness and imprecision in expert judgements via Triangular Fuzzy Numbers (TFNs)
-2. **LBWA** (Level-Based Weight Assessment) — a minimal-input weighting method requiring only adjacent pairwise comparisons
-3. **ARTASI** — a novel MCDM ranking technique resistant to rank reversal using reverse-sorting normalization and flexible aggregation
-4. **Decision Stability Intervals (DSI)** — a what-if sensitivity analysis that quantifies the exact perturbation ranges that preserve the original ranking
-5. **Monte Carlo Simulation** — probabilistic robustness assessment via 1000 Dirichlet-sampled weight scenarios
-
-The framework is applied to evaluate **5 global insurance brokerage firms** listed on the S&P 500 index across **30 financial and operational performance criteria** for the year 2024.
-
----
-
-## Case Study
-
-### Alternatives (Insurance Brokers)
-
-| Code | Full Name |
-|------|-----------|
-| **AJG** | Arthur J. Gallagher & Co. |
-| **AON** | Aon plc |
-| **BRO** | Brown & Brown, Inc. |
-| **MMC** | Marsh & McLennan Companies, Inc. |
-| **WTW** | Willis Towers Watson Public Limited Company |
-
-### Evaluation Criteria (30 Indicators)
-
-| Category | Criteria Codes | Type |
-|----------|---------------|------|
-| Liquidity Ratios | C1 – C3 | Benefit (max) |
-| Leverage Ratios | C4 – C6 | Cost (min) |
-| Profitability Ratios | C7 – C11 | Benefit (max) |
-| Coverage / Efficiency | C12 – C15 | Benefit (max) |
-| Cash Flow Statements | C16 – C18 | Mixed |
-| Financial Statement Items | C19 – C25 | Mixed |
-| Stock Market Performance | C26 – C28 | Mixed |
-| Credit & Operational | C29 – C30 | Mixed |
-
----
-
-## Modules
-
-### Module 1 — Fuzzy LBWA
-
-**File:** [`fcdm/flbwa.py`](fcdm/flbwa.py)
-
-Implements **Fuzzy Level-Based Weight Assessment** for deriving criterion importance weights from expert judgements under uncertainty.
-
-#### Key Equations
-
-**Step 1:** Scale upper bound:
-$$\delta = \max\{|Q_1|, |Q_2|, \ldots, |Q_k|\}$$
-
-**Step 4:** Elasticity coefficient: $\theta > \delta$ (set to **14.01** in the paper)
-
-**Step 5:** Fuzzy influence function for criterion $C_{jp}$ at significance level $j$:
-$$\tilde{f}(C_{jp}) = \frac{\theta}{j \cdot \theta + \tilde{x}_{jp}}$$
-
-where the TFN components are computed as:
-$$f^{(l)} = \frac{\theta}{j\theta + x^{(u)}}, \quad f^{(m)} = \frac{\theta}{j\theta + x^{(m)}}, \quad f^{(u)} = \frac{\theta}{j\theta + x^{(l)}}$$
-
-**Step 6a:** Fuzzy weight of the best criterion ($C_{29}$ — Credit Rating):
-$$\tilde{w}_1 = \frac{1}{1 + \sum_{j \neq 1} \tilde{f}(C_j)}$$
-
-**Step 6b:** Fuzzy weights of remaining criteria:
-$$\tilde{w}_j = \tilde{f}(C_j) \times \tilde{w}_1, \quad j = 2, 3, \ldots, n$$
-
-**Step 6c:** Centroid defuzzification:
-$$W_j = \frac{w_j^{(l)} + 4w_j^{(m)} + w_j^{(u)}}{6}$$
-
----
-
-### Module 2 — Modified ARTASI
-
-**File:** [`fcdm/modified_artasi.py`](fcdm/modified_artasi.py)
-
-Implements **Modified ARTASI** for ranking alternatives on the standardized decision matrix. Key improvement over classical ARTASI: explicit elimination of negative values before exponentiation.
-
-#### Key Equations
-
-**Step 0** — Negative value elimination:
-$$x_{ij} = x'_{ij} + \left|\min_j x'_{ij}\right| \quad \text{(for columns with negatives only)}$$
-
-**Step 2** — Absolute reference bounds (m = number of alternatives):
-$$\wp^{\max}_j = \max_i(x_{ij}) + \left[\max_i(x_{ij})\right]^{1/m}, \quad \wp^{\min}_j = \min_i(x_{ij}) - \left[\min_i(x_{ij})\right]^{1/m}$$
-
-**Step 3** — Standardization onto $[\Psi^{(l)}, \Psi^{(u)}] = [1, 100]$:
-$$\phi_{ij} = \frac{\Psi^{(u)} - \Psi^{(l)}}{\wp^{\max}_j - \wp^{\min}_j} x_{ij} + \frac{\wp^{\max}_j \Psi^{(l)} - \wp^{\min}_j \Psi^{(u)}}{\wp^{\max}_j - \wp^{\min}_j}$$
-
-For **cost criteria** (reverse-sorting):
-$$\zeta_{ij} = -\phi_{ij} + \max_i(\phi_{ij}) + \min_i(\phi_{ij})$$
-
-**Step 4** — Degrees of usefulness:
-$$\vartheta^+_{ij} = \frac{\zeta_{ij}}{\max_i(\zeta_{ij})} \cdot w_j \cdot \Psi^{(u)}, \qquad \vartheta^-_{ij} = -\vartheta_{ij} + \max_i(\vartheta_{ij}) + \min_i(\vartheta_{ij})$$
-
-**Step 5** — Aggregated utilities:
-$$I^+_i = \sum_{j=1}^n \vartheta^+_{ij}, \qquad I^-_i = \sum_{j=1}^n \vartheta^-_{ij}$$
-
-**Step 6** — Ultimate utility function (with $\alpha = 0.5$, $\phi = 1$):
-$$\Omega_i = (I^+_i + I^-_i) \cdot \left[\alpha \cdot f(I^+_i) + (1 - \alpha) \cdot f(I^-_i)\right]$$
-
-where $f(I^+_i) = \dfrac{I^+_i}{I^+_i + I^-_i}$ and $f(I^-_i) = \dfrac{I^-_i}{I^+_i + I^-_i}$
-
----
-
-### Module 3 — Decision Stability Intervals (DSI)
-
-**File:** [`fcdm/dsi_sensitivity.py`](fcdm/dsi_sensitivity.py)
-
-Implements systematic **what-if analysis** on both criterion weights and decision matrix cells. For each criterion weight $w_k$:
-
-**Perturbation Procedure:**
-$$w_k \leftarrow w_k + \omega, \quad w_{j \neq k} \leftarrow w_j - \frac{\omega}{n-1} \quad \text{(so that } \textstyle\sum w_j = 1\text{)}$$
-
-Repeat until rank order changes → record $w^{\max}_k$.
-
-Mirror for decreases → record $w^{\min}_k$.
-
-The **DSI** for criterion $k$ is then: $[w^{\min}_k, \; w^{\max}_k]$
-
-A **wide interval** = the ranking is **robust** to changes in that criterion's weight.  
-A **narrow interval** = the ranking is **fragile** and sensitive to small perturbations.
-
----
-
-### Module 4 — Monte Carlo Robustness
-
-**File:** [`fcdm/robustness_montecarlo.py`](fcdm/robustness_montecarlo.py)
-
-Implements probabilistic robustness evaluation using:
-
-1. **Dirichlet Simplex Sampling** — 1000 random weight vectors uniformly sampled from the 30-dimensional unit simplex:
-   $$w_k = \frac{\tilde{w}_k}{\sum_{j=1}^{30} \tilde{w}_j}, \quad \tilde{w}_k \sim \text{Exp}(1)$$
-
-2. **Score & Rank Distributions** — Empirical distributions of $\Omega_i$ and $\text{Rank}(i)$ over all simulations
-
-3. **Pairwise Stochastic Dominance** — Probability that alternative $A_i$ outperforms $A_k$:
-   $$P(A_i \succ A_k) = \frac{1}{N}\sum_{s=1}^{N} \mathbf{1}[\Omega_i^{(s)} > \Omega_k^{(s)}]$$
-
-4. **Comparative Benchmarking** — ARTASI vs. TOPSIS with Spearman $\rho$ and Kendall $\tau$ rank correlations
-
----
-
-## Test Programs
-
-| Program | Description | Key Output |
-|---------|-------------|------------|
-| [`test_01_flbwa.py`](test_01_flbwa.py) | Executes F-LBWA and validates weight derivation against **Table 7** | 30 fuzzy weights + crisp values |
-| [`test_02_artasi_ranking.py`](test_02_artasi_ranking.py) | Runs Modified ARTASI and validates ranking against **Table 10** | Omega scores + final broker ranking |
-| [`test_03_dsi_sensitivity.py`](test_03_dsi_sensitivity.py) | Computes weight and matrix DSI intervals comparing against **Table 11 & 12** | Stability intervals for all 30 criteria |
-| [`test_04_montecarlo_robustness.py`](test_04_montecarlo_robustness.py) | 1000-simulation MC analysis and ARTASI vs TOPSIS benchmarking | Rank distributions, dominance matrix, visualizations |
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/fcdm-insurance-mcdm.git
-cd fcdm-insurance-mcdm
-pip install numpy scipy matplotlib
+```
+                  ┌───────────────────────────────────────────────┐
+                  │          Expert Group Judgments               │
+                  └───────────────────────┬───────────────────────┘
+                                          │
+                                          ▼
+                      ┌───────────────────────────────────────┐
+                      │    Module 1: Fuzzy LBWA Weighting     │
+                      └───────────────────┬───────────────────┘
+                                          │  Criteria Weights (w_j)
+                                          ▼
+┌───────────────────────┐     ┌───────────────────────────────────────┐
+│ Decision Matrix (X)   │────▶│    Module 2: Modified ARTASI Ranking  │
+│ 5 Brokers x 30 Ratios │     └───────────────────┬───────────────────┘
+└───────────────────────┘                         │  Utility Scores (Omega_i)
+                                                  ▼
+                      ┌───────────────────────────────────────┐
+                      │   Module 3: DSI Sensitivity Analysis  │
+                      └───────────────────┬───────────────────┘
+                                          │  Stability Bounds [w_min, w_max]
+                                          ▼
+                      ┌───────────────────────────────────────┐
+                      │    Module 4: Monte Carlo Robustness   │
+                      └───────────────────────────────────────┘
 ```
 
-No additional dependencies required beyond Python standard library.
+---
+
+## 📐 Mathematical Formulation
+
+### Module 1: Fuzzy LBWA Criteria Weight Assessment
+Derives objective importance weights from non-linear expert rankings while accounting for cognitive imprecision via Triangular Fuzzy Numbers (TFNs) $\tilde{T} = (l, m, u)$.
+
+1. **Significance Level Partitioning**:
+   Criteria are grouped into ordered subsets $Q_1, Q_2, \dots, Q_k$ based on relative importance.
+   $$\delta = \max_{r} |Q_r|$$
+
+2. **Fuzzy Influence Function**:
+   With elasticity coefficient $\theta > \delta$ ($\theta = 14.01$):
+   $$\tilde{f}(C_{j}) = \left(\frac{\theta}{j\theta + x_j^{(u)}}, \, \frac{\theta}{j\theta + x_j^{(m)}}, \, \frac{\theta}{j\theta + x_j^{(l)}}\right)$$
+
+3. **Weight Derivation**:
+   For the highest-ranked criterion $C_*$ (Credit Rating, $C_{29}$):
+   $$\tilde{w}_* = \frac{1}{1 + \sum_{j \neq *} \tilde{f}(C_j)}$$
+   For all other criteria $j \neq *$:
+   $$\tilde{w}_j = \tilde{f}(C_j) \otimes \tilde{w}_*$$
+
+4. **Defuzzification & Normalization**:
+   $$w_j = \frac{w_j^{(l)} + 4w_j^{(m)} + w_j^{(u)}}{6}, \quad W_j = \frac{w_j}{\sum_{k=1}^n w_k}$$
 
 ---
 
-## Usage
+### Module 2: Modified ARTASI Alternative Ranking
+Evaluates alternatives against absolute dynamic boundary reference points rather than relative extrema, preventing rank reversal anomalies.
+
+1. **Non-Negativity Shift**:
+   $$x_{ij} = x'_{ij} + |\min_k x'_{kj}| \quad \text{for criteria with negative values}$$
+
+2. **Dynamic Range Formulation ($m$ alternatives)**:
+   $$\wp_j^{\max} = \max_i(x_{ij}) + \left[\max_i(x_{ij})\right]^{1/m}, \quad \wp_j^{\min} = \min_i(x_{ij}) - \left[\min_i(x_{ij})\right]^{1/m}$$
+
+3. **Standardization onto $[\Psi^{(l)}, \Psi^{(u)}] = [1, 100]$**:
+   $$\phi_{ij} = \Psi^{(l)} + \frac{x_{ij} - \wp_j^{\min}}{\wp_j^{\max} - \wp_j^{\min}} \left(\Psi^{(u)} - \Psi^{(l)}\right)$$
+
+4. **Cost Criteria Inversion**:
+   $$\zeta_{ij} = \begin{cases} \phi_{ij}, & C_j \in \text{Benefit} \\ \max_k \phi_{kj} + \min_k \phi_{kj} - \phi_{ij}, & C_j \in \text{Cost} \end{cases}$$
+
+5. **Degrees of Usefulness**:
+   $$\vartheta_{ij}^+ = \frac{\zeta_{ij}}{\max_k \zeta_{kj}} \cdot w_j \cdot \Psi^{(u)}, \quad \vartheta_{ij}^- = \max_k \vartheta_{kj}^+ + \min_k \vartheta_{kj}^+ - \vartheta_{ij}^+$$
+
+6. **Aggregated Comprehensive Utilities**:
+   $$I_i^+ = \sum_{j=1}^n \vartheta_{ij}^+, \quad I_i^- = \sum_{j=1}^n \vartheta_{ij}^-$$
+   $$\Omega_i = (I_i^+ + I_i^-) \left[ \alpha \cdot \frac{I_i^+}{I_i^+ + I_i^-} + (1 - \alpha) \cdot \frac{I_i^-}{I_i^+ + I_i^-} \right]$$
+   *(With aggregation weight $\alpha = 0.5$. Ranking is determined by descending order of $\Omega_i$.)*
+
+---
+
+### Module 3: Decision Stability Intervals (DSI)
+Quantifies the exact perturbation threshold a criterion weight or performance value can endure before inducing rank reversal of the optimal alternative $A_*$:
+
+$$w_k \to w_k + \Delta w_k, \quad w_j' = w_j - \frac{\Delta w_k}{n - 1} \quad (\forall j \neq k)$$
+$$\operatorname{DSI}(w_k) = [w_k^{\min}, \, w_k^{\max}] \quad \text{such that} \quad \operatorname{Rank}(A_*) = 1$$
+
+- **High Interval Width** ($\Delta w_k \gg 0$): Stable criterion, robust against measurement errors.
+- **Narrow Interval Width**: Sensitive critical indicator requiring precise audit.
+
+---
+
+### Module 4: Monte Carlo Robustness & Benchmarking
+Simulates $N = 1000$ weight vectors uniformly across the unit simplex via Dirichlet sampling:
+$$\mathbf{w}^{(s)} \sim \operatorname{Dir}(\mathbf{1}_n), \quad \sum_{j=1}^n w_j^{(s)} = 1$$
+
+- **Pairwise Stochastic Dominance**:
+  $$\mathbb{P}(A_i \succ A_k) = \frac{1}{N} \sum_{s=1}^N \mathbb{I}\left(\Omega_i^{(s)} > \Omega_k^{(s)}\right)$$
+
+- **Comparative Benchmarking (TOPSIS Rank Correlation)**:
+  $$\rho = 1 - \frac{6 \sum_{i=1}^m d_i^2}{m(m^2 - 1)}$$
+
+---
+
+## ⚡ Execution in Minimal Lines
+
+Run each validation script directly from terminal:
+
+```bash
+python test_01_flbwa.py
+python test_02_artasi_ranking.py
+python test_03_dsi_sensitivity.py
+python test_04_montecarlo_robustness.py
+```
+
+### Complete Workflow in 7 Lines of Python:
 
 ```python
 from fcdm.dataset import get_dataset
 from fcdm.flbwa import FuzzyLBWA
 from fcdm.modified_artasi import ModifiedARTASI
-from fcdm.dsi_sensitivity import DecisionStabilityIntervals
-from fcdm.robustness_montecarlo import MonteCarloRobustness
 
-# Load 2024 insurance broker dataset
 data = get_dataset()
-X       = data["X"]            # (5 alternatives, 30 criteria) decision matrix
-weights = data["weights"]       # Crisp weights from F-LBWA Table 7
-c_types = data["criteria_types"] # 'max' or 'min' per criterion
-
-# Run Modified ARTASI
-model = ModifiedARTASI(weights=weights, criteria_types=c_types)
-results = model.evaluate(X, alternative_names=data["alternative_names"])
-
-print("Rankings:", dict(zip(data["alternative_names"], results["ranks"])))
-# -> {'AJG': 2, 'AON': 4, 'BRO': 3, 'MMC': 1, 'WTW': 5}
-
-# Run all test programs
-python test_01_flbwa.py               # Module 1: Weight assessment
-python test_02_artasi_ranking.py       # Module 2: MCDM ranking
-python test_03_dsi_sensitivity.py      # Module 3: Stability intervals
-python test_04_montecarlo_robustness.py # Module 4: Probabilistic robustness
+w = FuzzyLBWA(data["expert_levels"], "C29", 14.01).compute()["crisp_weights"]
+model = ModifiedARTASI(weights=w, criteria_types=data["criteria_types"])
+ranks = model.evaluate(data["X"], data["alternative_names"])["ranks"]
+print(dict(zip(data["alternative_names"], ranks)))
 ```
 
 ---
 
-## Key Results
+## 📊 Summary of Results
 
-### Final Rankings (Modified ARTASI, 2024 Data)
+### 1. Alternative Rankings (2024 S&P 500 Insurance Brokers)
 
-| Rank | Broker | Omega Score | Key Strength |
-|------|--------|-------------|--------------|
-| **1** | **MMC** (Marsh & McLennan) | **85.69** | Superior profitability, scale & cash flows |
-| 2 | AJG (Arthur J. Gallagher) | 82.22 | Strong liquidity and leverage control |
-| 3 | BRO (Brown & Brown) | 73.04 | Highest EBITDA margin, efficient operations |
-| 4 | AON | 69.45 | Large revenue base, moderate risk profile |
-| 5 | WTW | 55.10 | Weakest profitability; negative ROA and ROE |
+| Rank | Broker Code | Firm Name | $\Omega_i$ Score | Empirical $P(\text{Rank}=1)$ |
+|:---:|:---:|---|:---:|:---:|
+| **1** | **MMC** | Marsh & McLennan Companies, Inc. | **85.69** | **93.1%** |
+| **2** | **AJG** | Arthur J. Gallagher & Co. | **82.22** | 6.7% |
+| **3** | **BRO** | Brown & Brown, Inc. | **73.04** | 0.2% |
+| **4** | **AON** | Aon plc | **69.45** | 0.0% |
+| **5** | **WTW** | Willis Towers Watson Public Limited Company | **55.10** | 0.0% |
 
-### Monte Carlo Findings (1000 Simulations)
-
-- **MMC** maintains Rank 1 in **93.1%** of all weight scenarios → stochastic dominance confirmed
-- **WTW** occupies Rank 5 in **93.8%** of scenarios → consistent last-place positioning
-- **Spearman ρ = 0.90** and **Kendall τ = 0.80** between ARTASI and TOPSIS → strong rank agreement
-
-### Stability Insights
-
-- **Most sensitive** criterion: `C15` (Current Assets/Total Assets) — tightest DSI width → small weight changes alter rankings
-- **Most robust** criterion: `C29` (Credit Rating) — DSI interval width = 0.5245 → rankings highly stable to this criterion's weight fluctuation
-- Large-scale firm attributes (Revenue, Total Assets, Employees) show widest matrix-level stability intervals
+### 2. Sensitivity & Stability Highlights
+- **Top Winner Invariance**: MMC preserves Rank 1 under weight perturbations of up to $\pm 30\%$ on key financial indicators.
+- **Most Critical Indicator**: $C_{15}$ (Current Assets / Total Assets) exhibited the narrowest DSI band.
+- **Most Robust Indicator**: $C_{29}$ (Credit Rating) tolerated weight fluctuations up to width $0.5245$.
+- **Validation Against TOPSIS**: Spearman rank correlation $\rho = 0.90$ ($p < 0.05$) verifies algorithmic consistency.
 
 ---
 
-## Repository Structure
+## 📁 Repository Structure
 
-```
+```text
 fcdm-insurance-mcdm/
 ├── fcdm/
-│   ├── __init__.py                  # Package init
-│   ├── dataset.py                   # Tables 4, 5, 7, 8 from the paper
-│   ├── flbwa.py                     # Module 1: Fuzzy LBWA
-│   ├── modified_artasi.py           # Module 2: Modified ARTASI
-│   ├── dsi_sensitivity.py           # Module 3: Decision Stability Intervals
-│   └── robustness_montecarlo.py     # Module 4: Monte Carlo Robustness + TOPSIS
-├── test_01_flbwa.py                 # Test: F-LBWA weight derivation
-├── test_02_artasi_ranking.py        # Test: Broker ranking & Table 10 validation
-├── test_03_dsi_sensitivity.py       # Test: DSI weight & matrix sensitivity
-├── test_04_montecarlo_robustness.py # Test: MC simulation & ARTASI vs TOPSIS
-├── monte_carlo_results.png          # Auto-generated: MC visualization plots
-├── requirements.txt
-└── README.md
+│   ├── __init__.py               # Package initializer
+│   ├── dataset.py                # Decision matrix & criteria metadata (Tables 4, 5, 7, 8)
+│   ├── flbwa.py                  # Module 1: Fuzzy LBWA implementation
+│   ├── modified_artasi.py        # Module 2: Modified ARTASI implementation
+│   ├── dsi_sensitivity.py        # Module 3: Decision Stability Intervals (DSI)
+│   └── robustness_montecarlo.py  # Module 4: Monte Carlo simulation & TOPSIS benchmark
+├── test_01_flbwa.py              # Test 1: Weight derivation validation
+├── test_02_artasi_ranking.py     # Test 2: Alternative ranking validation
+├── test_03_dsi_sensitivity.py    # Test 3: Weight stability interval validation
+├── test_04_montecarlo_robustness.py # Test 4: 1000 MC runs & plot generation
+├── monte_carlo_results.png       # Auto-generated visualization
+├── requirements.txt              # numpy, scipy, matplotlib
+└── README.md                     # Documentation with LaTeX formulations
 ```
 
 ---
 
-## Reference
-
-**M. Özçalici et al.** (2026). *A robust hybrid MCDM framework with emphasis on decision stability intervals: Performance evaluation of global insurance brokers using fuzzy LBWA and modified ARTASI*. **Applied Soft Computing**, 190, 114557.  
-https://doi.org/10.1016/j.asoc.2026.114557
+## 📄 License
+This project is licensed under the MIT License.
