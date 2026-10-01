@@ -11,7 +11,7 @@ Based on the research paper:
 
 ---
 
-## 📌 Framework Architecture
+##  Framework Architecture
 
 ```
                   ┌───────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ Based on the research paper:
 
 ---
 
-## 📐 Mathematical Formulation
+##  Mathematical Formulation
 
 ### Module 1: Fuzzy LBWA Criteria Weight Assessment
 Derives objective importance weights from non-linear expert rankings while accounting for cognitive imprecision via Triangular Fuzzy Numbers (TFNs) $\tilde{T} = (l, m, u)$.
@@ -160,7 +160,7 @@ print(dict(zip(data["alternative_names"], ranks)))
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 fcdm-insurance-mcdm/
