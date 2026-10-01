@@ -113,7 +113,7 @@ $$\mathbf{w}^{(s)} \sim \operatorname{Dir}(\mathbf{1}_n), \quad \sum_{j=1}^n w_j
 
 ---
 
-## ⚡ Execution in Minimal Lines
+## Execution in Minimal Lines
 
 Run each validation script directly from terminal:
 
@@ -140,7 +140,7 @@ print(dict(zip(data["alternative_names"], ranks)))
 
 ---
 
-## 📊 Summary of Results
+## Summary of Results
 
 ### 1. Alternative Rankings (2024 S&P 500 Insurance Brokers)
 
@@ -182,5 +182,3 @@ fcdm-insurance-mcdm/
 
 ---
 
-## 📄 License
-This project is licensed under the MIT License.
