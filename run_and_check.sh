@@ -14,7 +14,7 @@ OUT="SRSP Python ARTASI Tables.xlsx"
 [ -f "$IN" ] || { echo "Missing input workbook: $IN (upload it next to this script)"; exit 1; }
 pip install -q numpy openpyxl 2>/dev/null
 echo "Input workbook : $IN"
-echo "Running ARTASI for every cluster - full tables follow..."
+echo "Running ARTASI for every cluster..."
 python srsp_artasi.py "$IN" -o "$OUT" | tee output.txt
 [ ${PIPESTATUS[0]} -eq 0 ] || { echo "Run failed - see output.txt"; exit 1; }
 echo; echo "================ CHECKS ================"
@@ -39,6 +39,6 @@ for name, o in res.items():
 if done: print(f"Excel-formula Omega vs Python Omega: {done} clusters compared, max difference {worst:.1e} ->", "MATCH" if worst < 1e-8 else "DIFFERENT")
 else: print("(input workbook has no Excel ARTASI formula columns, so no formula cross-check)")
 PY
-T=$(grep -c "^TABLE" output.txt); D=$(grep -c "^DECISION" output.txt)
-echo "Tables printed: $T (expected 7 per cluster)   Decisions: $D (one per cluster)"
+T=$(grep -c "^TABLE" output.txt); R=$(grep -c "^RANKING" output.txt)
+echo "Cluster tables (I+, I-, Omega): $T (expected 7)   Final rankings: $R (expected 7)"
 echo; echo "Full tables are in output.txt and $OUT"

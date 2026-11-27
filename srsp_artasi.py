@@ -14,7 +14,8 @@ Output: (1) every ARTASI table printed on screen, step by step, for each cluster
         (2) one Excel workbook with the same tables + the best alternative of each cluster.
 
 Run   : python srsp_artasi.py "SRSP CRITIC Weights - All Clusters.xlsx" -o SRSP_ARTASI_Results.xlsx
-        --cluster Cluster1   only one sheet            --top 10   rows shown in the final ranking table (default all)
+        --cluster Cluster1   only one sheet            --top 10   rows shown per cluster in the final rankings (default all)
+        --detail             also print every step table (zeta, theta+, theta-); default shows only I+, I-, Omega
         --types max,max,max  criteria directions (default all max, because F2 was converted to -F2)
 
 FORMULAS (x_ij = value of alternative i on criterion j, m alternatives, n criteria, w_j = CRITIC weight)
@@ -196,6 +197,34 @@ def report(name, o, top=None):
           f"(I+ = {r['I_pos'][b]:.4f}, I- = {r['I_neg'][b]:.4f}, Omega = {r['Omega'][b]:.4f}); "
           f"runner-up Sl No. {ids[order[1]]} (Omega {r['Omega'][order[1]]:.4f})")
 
+def report_concise(name, o):
+    """Per cluster: only I+, I- and Omega for every alternative (original Sl No. order)."""
+    d, r, nm, w = o["data"], o["res"], o["data"]["names"], o["data"]["weights"]
+    f4 = lambda v: f"{v:.4f}"
+    print("\n" + "=" * 80 + f"\n{name}: {len(d['ids'])} alternatives | CRITIC weights " +
+          ", ".join(f"{a}={b:.4f}" for a, b in zip(nm, w)) + "\n" + "=" * 80)
+    print(f"TABLE  {name}:  I+, I-  and  Omega = (I+ + I-) * [alpha*f(I+) + (1-alpha)*f(I-)]   (alpha = {ALPHA:g})")
+    print(table(["Sl No.", "I+", "I-", "Omega"],
+                [[d["ids"][i], r["I_pos"][i], r["I_neg"][i], r["Omega"][i]] for i in range(len(d["ids"]))],
+                [str, f4, f4, f4]))
+
+def final_rankings(out, top=None):
+    """Last section: ARTASI ranking (by Omega, highest = rank 1) for every cluster, then the best of each."""
+    print("\n" + "#" * 80 + "\nFINAL ARTASI RANKINGS  (rank 1 = highest Omega)\n" + "#" * 80)
+    for name, o in out.items():
+        d, r = o["data"], o["res"]
+        order = np.argsort(r["rank"], kind="stable")
+        order = order if not top else order[:top]
+        print(f"\nRANKING  {name}  ({len(d['ids'])} alternatives)")
+        print(table(["Rank", "Sl No.", "Omega"], [[r["rank"][i], d["ids"][i], r["Omega"][i]] for i in order],
+                    [lambda v: str(int(v)), str, lambda v: f"{v:.4f}"]))
+    print("\n" + "=" * 80 + "\nBEST ALTERNATIVE IN EACH CLUSTER (rank 1 by Omega)\n" + "=" * 80)
+    rows = []
+    for name, o in out.items():
+        r, d = o["res"], o["data"]; b = int(np.argmin(r["rank"]))
+        rows.append([name, len(d["ids"]), d["ids"][b], r["I_pos"][b], r["I_neg"][b], r["Omega"][b]])
+    print(table(["Cluster", "m", "Best Sl No.", "I+", "I-", "Omega"], rows, [str, str, str] + [lambda v: f"{v:.4f}"] * 3))
+
 # ------------------------------------------------------------------ Excel export
 def export(out, path):
     wb = openpyxl.Workbook()
@@ -263,17 +292,14 @@ def main():
     ap = argparse.ArgumentParser(description="Modified ARTASI ranking per cluster, with all step tables.")
     ap.add_argument("workbook"); ap.add_argument("-o", "--output", default="SRSP_ARTASI_Results.xlsx")
     ap.add_argument("--top", type=int, default=None); ap.add_argument("--types", default=None); ap.add_argument("--cluster", default=None)
+    ap.add_argument("--detail", action="store_true", help="also print every step table (zeta, theta+, theta-)")
     a = ap.parse_args()
     out = run(a.workbook, [t.strip().lower() for t in a.types.split(",")] if a.types else None, a.cluster)
     if not out:
         raise SystemExit("No cluster sheets with criteria columns and CRITIC weights found.")
-    for name, o in out.items(): report(name, o, a.top)
-    print("\n" + "=" * 100 + "\nBEST ALTERNATIVE IN EACH CLUSTER (rank 1 by Omega)\n" + "=" * 100)
-    rows = []
     for name, o in out.items():
-        r, d = o["res"], o["data"]; b = int(np.argmin(r["rank"]))
-        rows.append([name, len(d["ids"]), d["ids"][b], r["I_pos"][b], r["I_neg"][b], r["Omega"][b]])
-    print(table(["Cluster", "m", "Best Sl No.", "I+", "I-", "Omega"], rows, [str, str, str] + [lambda v: f"{v:.4f}"] * 3))
+        report(name, o, a.top) if a.detail else report_concise(name, o)
+    final_rankings(out, a.top)
     export(out, a.output); print(f"\nSaved {a.output}")
 
 if __name__ == "__main__":
