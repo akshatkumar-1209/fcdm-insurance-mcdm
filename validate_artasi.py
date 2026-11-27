@@ -25,6 +25,10 @@ def ref_artasi(X, w, alpha=0.5, phi_exp=1.0, lo=1.0, hi=100.0):
 
 path = sys.argv[1]; results = sys.argv[2]
 out = S.run(path)
+from modified_artasi import ModifiedARTASI
+for name, o in out.items():
+    ref = ModifiedARTASI(o["data"]["weights"], o["types"]).evaluate(o["data"]["X"])
+    print(name, "matches repo ModifiedARTASI class:", np.allclose(ref["Omega"], o["res"]["Omega"], atol=1e-9))
 for name, o in out.items():
     d, r = o["data"], o["res"]
     om, ip, ineg = ref_artasi(d["X"].tolist(), d["weights"].tolist())
@@ -32,15 +36,10 @@ for name, o in out.items():
     rk_ref = [1 + sum(1 for b in om if b > a + 1e-9) for a in om]
     print(f"{name}: max|dOmega|={dO:.2e} max|dI+|={dI:.2e} ranks_equal={rk_ref==list(r['rank'])} "
           f"Omega range [{min(om):.2f},{max(om):.2f}] weights_sum={d['weights'].sum():.6f}")
-# weights read == CRITIC recomputed from raw (check only)
-wbv = openpyxl.load_workbook(path, data_only=True)
-for name, o in out.items():
-    X = o["data"]["X"]; R = (X - X.min(0)) / (X.max(0) - X.min(0))
-    C = R.std(0, ddof=1) * (1 - np.corrcoef(R.T)).sum(1); print(name, "weights match CRITIC:", np.allclose(C / C.sum(), o["data"]["weights"], atol=1e-9))
 # exported workbook matches
 wo = openpyxl.load_workbook(results)
 print(wo.sheetnames)
 for name in out:
-    ws = wo[f"{name}_ARTASI"]; k = 2 + len(out[name]["data"]["names"])
-    om = [ws.cell(r, k + 2).value for r in range(2, 2 + len(out[name]["data"]["ids"]))]
+    ws = wo[f"{name}_ARTASI"]; n = len(out[name]["data"]["names"]); m = len(out[name]["data"]["ids"]); col = 2 + 6 * n + 4
+    om = [ws.cell(r, col).value for r in range(3, 3 + m)]
     print(name, "export ok:", np.allclose(om, out[name]["res"]["Omega"]))
