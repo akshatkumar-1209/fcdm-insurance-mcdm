@@ -1,184 +1,62 @@
-# Fuzzy MCDM Framework for Insurance Broker Performance Evaluation
+# SRSP Reservoir – CRITIC Weights + Modified ARTASI Ranking
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue?logo=python)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+## The problem
+The Sriram Sagar Reservoir Problem (SRSP) is a multi-objective reservoir operation problem. Each candidate
+release policy (a point on the Pareto front, grouped into 7 clusters) is judged on three objectives:
 
-A robust hybrid Multi-Criteria Decision-Making (MCDM) framework combining **Fuzzy Level-Based Weight Assessment (F-LBWA)** and **Modified ARTASI**, augmented with **Decision Stability Intervals (DSI)** and **Monte Carlo Robustness Analysis**.
+| Objective | Meaning | Direction |
+|---|---|---|
+| **F1** | Agricultural benefit from using reservoir water (crop production) | Maximise (benefit) |
+| **F2** | Cost / expenditure of water-resource utilisation | Minimise (cost) |
+| **F3** | Environmental benefit: water released for aquatic / marine life | Maximise (benefit) |
 
-Based on the research paper:
-> **"A robust hybrid MCDM framework with emphasis on decision stability intervals: Performance evaluation of global insurance brokers using fuzzy LBWA and modified ARTASI"**  
-> *Applied Soft Computing*, Vol. 190 (2026), 114557.
+The aim is to **rank the alternatives inside each cluster and pick the best one**.
 
----
+## Handling the cost objective: F2 → −F2
+F1 and F3 should be as large as possible; F2 should be as small as possible. To treat all three the same way,
+F2 is replaced by **−F2**, because *maximising −F2 is the same as minimising F2*. After this one change every
+criterion is a maximisation (benefit) criterion, so no separate cost-handling is needed downstream.
 
-##  Framework Architecture
+## How it is solved
+1. **CRITIC weights** (done in Excel, `SRSP CRITIC Weights - All Clusters.xlsx`, sheets Cluster1–Cluster7).
+   No expert scores are needed; the weights come from the data itself. Notation: `x_aj` = value of alternative `a`
+   on criterion `j` (F1, −F2, F3), `n` = number of alternatives, `f_j*` = best (max) and `f_j,*` = worst (min) value of criterion `j`.
+   - Normalisation (all criteria maximised): `x_aj = (f_j(a) − f_j,*) / (f_j* − f_j,*)`  → every value lies in [0, 1]
+   - Standard deviation of each normalised column: `σ_j = √[ Σ_a (x_aj − x̄_j)² / (n − 1) ]`
+   - Correlation between criteria `j` and `k`: `r_jk = Pearson correlation of columns x_j and x_k`
+   - Conflict of criterion `j`: `Σ_k (1 − r_jk)`
+   - Information content: `C_j = σ_j · Σ_k (1 − r_jk)`
+   - **Weight: `w_j = C_j / Σ_k C_k`** (so `w_j ≥ 0` and `Σ w_j = 1`)
+2. **Modified ARTASI** (`srsp_artasi.py`) **reads** these weights (it does not recalculate them) and computes, per cluster:
+   - Step 0: remove negatives (−F2 is negative): `x = x' + |min x'|`
+   - Step 1: bounds `p_max = max(x) + max(x)^(1/m)`, `p_min = min(x) − min(x)^(1/m)`
+   - Step 2: standardise to 1–100: `ζ = 1 + (x − p_min)/(p_max − p_min)·99`
+   - Step 3: ideal usefulness `θ⁺ = ζ / max ζ · w · 100`, and `I⁺ = Σθ⁺`
+   - Step 4: anti-ideal usefulness `θ⁻ = max t + min t − t`, with `t = min ζ / ζ · w · 100`, and `I⁻ = Σθ⁻`
+   - Step 5–6: `Ω = (I⁺ + I⁻)·[α·f(I⁺) + (1−α)·f(I⁻)]`, `f(I⁺) = I⁺/(I⁺+I⁻)`, `f(I⁻) = I⁻/(I⁺+I⁻)`, `α = 0.5`
+   - Step 7: **rank by Ω (highest = rank 1); the rank-1 alternative is the best in the cluster**
 
-```
-                  ┌───────────────────────────────────────────────┐
-                  │          Expert Group Judgments               │
-                  └───────────────────────┬───────────────────────┘
-                                          │
-                                          ▼
-                      ┌───────────────────────────────────────┐
-                      │    Module 1: Fuzzy LBWA Weighting     │
-                      └───────────────────┬───────────────────┘
-                                          │  Criteria Weights (w_j)
-                                          ▼
-┌───────────────────────┐     ┌───────────────────────────────────────┐
-│ Decision Matrix (X)   │────▶│    Module 2: Modified ARTASI Ranking  │
-│ 5 Brokers x 30 Ratios │     └───────────────────┬───────────────────┘
-└───────────────────────┘                         │  Utility Scores (Omega_i)
-                                                  ▼
-                      ┌───────────────────────────────────────┐
-                      │   Module 3: DSI Sensitivity Analysis  │
-                      └───────────────────┬───────────────────┘
-                                          │  Stability Bounds [w_min, w_max]
-                                          ▼
-                      ┌───────────────────────────────────────┐
-                      │    Module 4: Monte Carlo Robustness   │
-                      └───────────────────────────────────────┘
-```
-
----
-
-##  Mathematical Formulation
-
-### Module 1: Fuzzy LBWA Criteria Weight Assessment
-Derives objective importance weights from non-linear expert rankings while accounting for cognitive imprecision via Triangular Fuzzy Numbers (TFNs) $\tilde{T} = (l, m, u)$.
-
-1. **Significance Level Partitioning**:
-   Criteria are grouped into ordered subsets $Q_1, Q_2, \dots, Q_k$ based on relative importance.
-   $$\delta = \max_{r} |Q_r|$$
-
-2. **Fuzzy Influence Function**:
-   With elasticity coefficient $\theta > \delta$ ($\theta = 14.01$):
-   $$\tilde{f}(C_{j}) = \left(\frac{\theta}{j\theta + x_j^{(u)}}, \, \frac{\theta}{j\theta + x_j^{(m)}}, \, \frac{\theta}{j\theta + x_j^{(l)}}\right)$$
-
-3. **Weight Derivation**:
-   For the highest-ranked criterion $C_*$ (Credit Rating, $C_{29}$):
-   $$\tilde{w}_* = \frac{1}{1 + \sum_{j \neq *} \tilde{f}(C_j)}$$
-   For all other criteria $j \neq *$:
-   $$\tilde{w}_j = \tilde{f}(C_j) \otimes \tilde{w}_*$$
-
-4. **Defuzzification & Normalization**:
-   $$w_j = \frac{w_j^{(l)} + 4w_j^{(m)} + w_j^{(u)}}{6}, \quad W_j = \frac{w_j}{\sum_{k=1}^n w_k}$$
-
----
-
-### Module 2: Modified ARTASI Alternative Ranking
-Evaluates alternatives against absolute dynamic boundary reference points rather than relative extrema, preventing rank reversal anomalies.
-
-1. **Non-Negativity Shift**:
-   $$x_{ij} = x'_{ij} + |\min_k x'_{kj}| \quad \text{for criteria with negative values}$$
-
-2. **Dynamic Range Formulation ($m$ alternatives)**:
-   $$\wp_j^{\max} = \max_i(x_{ij}) + \left[\max_i(x_{ij})\right]^{1/m}, \quad \wp_j^{\min} = \min_i(x_{ij}) - \left[\min_i(x_{ij})\right]^{1/m}$$
-
-3. **Standardization onto $[\Psi^{(l)}, \Psi^{(u)}] = [1, 100]$**:
-   $$\phi_{ij} = \Psi^{(l)} + \frac{x_{ij} - \wp_j^{\min}}{\wp_j^{\max} - \wp_j^{\min}} \left(\Psi^{(u)} - \Psi^{(l)}\right)$$
-
-4. **Cost Criteria Inversion**:
-   $$\zeta_{ij} = \begin{cases} \phi_{ij}, & C_j \in \text{Benefit} \\ \max_k \phi_{kj} + \min_k \phi_{kj} - \phi_{ij}, & C_j \in \text{Cost} \end{cases}$$
-
-5. **Degrees of Usefulness**:
-   $$\vartheta_{ij}^+ = \frac{\zeta_{ij}}{\max_k \zeta_{kj}} \cdot w_j \cdot \Psi^{(u)}, \quad \vartheta_{ij}^- = \max_k \vartheta_{kj}^+ + \min_k \vartheta_{kj}^+ - \vartheta_{ij}^+$$
-
-6. **Aggregated Comprehensive Utilities**:
-   $$I_i^+ = \sum_{j=1}^n \vartheta_{ij}^+, \quad I_i^- = \sum_{j=1}^n \vartheta_{ij}^-$$
-   $$\Omega_i = (I_i^+ + I_i^-) \left[ \alpha \cdot \frac{I_i^+}{I_i^+ + I_i^-} + (1 - \alpha) \cdot \frac{I_i^-}{I_i^+ + I_i^-} \right]$$
-   *(With aggregation weight $\alpha = 0.5$. Ranking is determined by descending order of $\Omega_i$.)*
-
----
-
-### Module 3: Decision Stability Intervals (DSI)
-Quantifies the exact perturbation threshold a criterion weight or performance value can endure before inducing rank reversal of the optimal alternative $A_*$:
-
-$$w_k \to w_k + \Delta w_k, \quad w_j' = w_j - \frac{\Delta w_k}{n - 1} \quad (\forall j \neq k)$$
-$$\operatorname{DSI}(w_k) = [w_k^{\min}, \, w_k^{\max}] \quad \text{such that} \quad \operatorname{Rank}(A_*) = 1$$
-
-- **High Interval Width** ($\Delta w_k \gg 0$): Stable criterion, robust against measurement errors.
-- **Narrow Interval Width**: Sensitive critical indicator requiring precise audit.
-
----
-
-### Module 4: Monte Carlo Robustness & Benchmarking
-Simulates $N = 1000$ weight vectors uniformly across the unit simplex via Dirichlet sampling:
-$$\mathbf{w}^{(s)} \sim \operatorname{Dir}(\mathbf{1}_n), \quad \sum_{j=1}^n w_j^{(s)} = 1$$
-
-- **Pairwise Stochastic Dominance**:
-  $$\mathbb{P}(A_i \succ A_k) = \frac{1}{N} \sum_{s=1}^N \mathbb{I}\left(\Omega_i^{(s)} > \Omega_k^{(s)}\right)$$
-
-- **Comparative Benchmarking (TOPSIS Rank Correlation)**:
-  $$\rho = 1 - \frac{6 \sum_{i=1}^m d_i^2}{m(m^2 - 1)}$$
-
----
-
-## Execution in Minimal Lines
-
-Run each validation script directly from terminal:
-
+## Run
 ```bash
-python test_01_flbwa.py
-python test_02_artasi_ranking.py
-python test_03_dsi_sensitivity.py
-python test_04_montecarlo_robustness.py
+pip install numpy openpyxl
+python srsp_artasi.py "SRSP CRITIC Weights - All Clusters.xlsx" -o "SRSP Results Final.xlsx"
+# options: --cluster Cluster1   --top 10   --types max,max,max
 ```
+The program prints every step as a table (weights, shifted data, bounds, ζ, θ⁺ with I⁺, θ⁻ with I⁻, Ω and rank)
+for each cluster, then the best alternative of each cluster, and saves the same tables to Excel.
 
-### Complete Workflow in 7 Lines of Python:
+## Results (best alternative per cluster)
+| Cluster | Alternatives | Best (Sl No.) | Ω |
+|---|---|---|---|
+| Cluster1 | 21 | 1 | 76.8349 |
+| Cluster2 | 41 | 14 | 86.3582 |
+| Cluster3 | 58 | 29 | 85.0066 |
+| Cluster4 | 33 | 16 | 84.7302 |
+| Cluster5 | 60 | 5 | 87.3342 |
+| Cluster6 | 28 | 5 | 83.9795 |
+| Cluster7 | 42 | 28 | 81.0946 |
 
-```python
-from fcdm.dataset import get_dataset
-from fcdm.flbwa import FuzzyLBWA
-from fcdm.modified_artasi import ModifiedARTASI
-
-data = get_dataset()
-w = FuzzyLBWA(data["expert_levels"], "C29", 14.01).compute()["crisp_weights"]
-model = ModifiedARTASI(weights=w, criteria_types=data["criteria_types"])
-ranks = model.evaluate(data["X"], data["alternative_names"])["ranks"]
-print(dict(zip(data["alternative_names"], ranks)))
-```
-
----
-
-## Summary of Results
-
-### 1. Alternative Rankings (2024 S&P 500 Insurance Brokers)
-
-| Rank | Broker Code | Firm Name | $\Omega_i$ Score | Empirical $P(\text{Rank}=1)$ |
-|:---:|:---:|---|:---:|:---:|
-| **1** | **MMC** | Marsh & McLennan Companies, Inc. | **85.69** | **93.1%** |
-| **2** | **AJG** | Arthur J. Gallagher & Co. | **82.22** | 6.7% |
-| **3** | **BRO** | Brown & Brown, Inc. | **73.04** | 0.2% |
-| **4** | **AON** | Aon plc | **69.45** | 0.0% |
-| **5** | **WTW** | Willis Towers Watson Public Limited Company | **55.10** | 0.0% |
-
-### 2. Sensitivity & Stability Highlights
-- **Top Winner Invariance**: MMC preserves Rank 1 under weight perturbations of up to $\pm 30\%$ on key financial indicators.
-- **Most Critical Indicator**: $C_{15}$ (Current Assets / Total Assets) exhibited the narrowest DSI band.
-- **Most Robust Indicator**: $C_{29}$ (Credit Rating) tolerated weight fluctuations up to width $0.5245$.
-- **Validation Against TOPSIS**: Spearman rank correlation $\rho = 0.90$ ($p < 0.05$) verifies algorithmic consistency.
-
----
-
-## Repository Structure
-
-```text
-fcdm-insurance-mcdm/
-├── fcdm/
-│   ├── __init__.py               # Package initializer
-│   ├── dataset.py                # Decision matrix & criteria metadata (Tables 4, 5, 7, 8)
-│   ├── flbwa.py                  # Module 1: Fuzzy LBWA implementation
-│   ├── modified_artasi.py        # Module 2: Modified ARTASI implementation
-│   ├── dsi_sensitivity.py        # Module 3: Decision Stability Intervals (DSI)
-│   └── robustness_montecarlo.py  # Module 4: Monte Carlo simulation & TOPSIS benchmark
-├── test_01_flbwa.py              # Test 1: Weight derivation validation
-├── test_02_artasi_ranking.py     # Test 2: Alternative ranking validation
-├── test_03_dsi_sensitivity.py    # Test 3: Weight stability interval validation
-├── test_04_montecarlo_robustness.py # Test 4: 1000 MC runs & plot generation
-├── monte_carlo_results.png       # Auto-generated visualization
-├── requirements.txt              # numpy, scipy, matplotlib
-└── README.md                     # Documentation with LaTeX formulations
-```
-
----
-
+## Files
+- `srsp_artasi.py` – reads CRITIC weights, runs ARTASI, prints and exports all tables
+- `SRSP CRITIC Weights - All Clusters.xlsx` – cluster data (with F2 as −F2) and CRITIC weights (input)
+- `SRSP Results Final.xlsx` – step tables, Ω, ranks and best alternatives (output)
